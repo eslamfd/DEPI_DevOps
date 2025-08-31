@@ -1,0 +1,116 @@
+---
+- name: Docker check, install if needed, then run Dockerfile
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    docker_test_image: my_test_image
+    dockerfile_path: Dockerfile   # Dockerfile is in the same directory as the playbook
+
+  tasks:
+
+    - name: Check if docker is installed
+      command: docker --version
+      register: docker_check
+      ignore_errors: yes
+
+    - name: Print Docker version if installed
+      debug:
+        msg: "Docker version is {{ docker_check.stdout }}"
+      when: docker_check.rc == 0
+
+    - name: Check minimum requirements
+      when: docker_check.rc != 0
+      block:
+        - name: Fail if less than 2GB RAM
+          assert:
+            that:
+              - ansible_memtotal_mb >= 2000
+            fail_msg: "Not enough memory to install Docker (minimum 2GB required)."
+
+        - name: Fail if less than 2 CPU cores
+          assert:
+            that:
+              - ansible_processor_cores >= 2
+            fail_msg: "Not enough CPU cores to install Docker (minimum 2 required)."
+
+    - name: Install Docker on Ubuntu
+      when: docker_check.rc != 0 and ansible_os_family == "Debian"
+      block:
+        - name: Update apt
+          apt:
+            update_cache: yes
+
+        - name: Install required packages
+          apt:
+            name:
+              - apt-transport-https
+              - ca-certificates
+              - curl
+              - software-properties-common
+            state: present
+
+        - name: Add Docker GPG key
+          apt_key:
+            url: https://download.docker.com/linux/ubuntu/gpg
+            state: present
+
+        - name: Add Docker repository
+          apt_repository:
+            repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+            state: present
+
+        - name: Install docker-ce
+          apt:
+            name: docker-ce
+            state: latest
+            update_cache: yes
+
+    - name: Install Docker on CentOS
+      when: docker_check.rc != 0 and ansible_os_family == "RedHat"
+      block:
+        - name: Install yum-utils
+          yum:
+            name: yum-utils
+            state: present
+
+        - name: Add Docker repo
+          command: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+
+        - name: Install docker-ce
+          yum:
+            name: docker-ce
+            state: latest
+
+        - name: Enable and start docker
+          service:
+            name: docker
+            state: started
+            enabled: yes
+
+    - name: Install Docker on Windows
+      when: docker_check.rc != 0 and ansible_os_family == "Windows"
+      block:
+        - name: Ensure Docker Desktop is installed
+          win_chocolatey:
+            name: docker-desktop
+            state: present
+
+    - name: Re-check Docker installation
+      command: docker --version
+      register: docker_check_after
+      ignore_errors: yes
+
+    - name: Print Docker version after install
+      debug:
+        msg: "Docker installed successfully: {{ docker_check_after.stdout }}"
+      when: docker_check_after.rc == 0
+
+    - name: Build Docker image from Dockerfile
+      community.docker.docker_image:
+        name: "{{ docker_test_image }}"
+        build:
+          path: "{{ playbook_dir }}"
+          dockerfile: "{{ dockerfile_path }}"
+      when: docker_check_after.rc == 0 or docker_check.rc == 0
