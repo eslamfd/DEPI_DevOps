@@ -165,3 +165,92 @@ The Ansible playbook automates Docker installation across multiple operating sys
 
 ---
 
+# Ansible Configuration (`ansible.cfg`)
+
+This configuration defines defaults, privilege escalation, and SSH connection behavior for Ansible runs.
+
+---
+
+## `[defaults]`
+
+* **inventory = ./hosts**
+
+  * Specifies the inventory file location (`./hosts`).
+
+* **remote\_user = ansible**
+
+  * Default user for connecting to managed hosts.
+
+* **host\_key\_checking = False**
+
+  * Disables host key verification.
+  * Useful for lab/testing environments; not recommended in production.
+
+* **retry\_files\_enabled = False**
+
+  * Prevents creation of retry files (`*.retry`).
+
+* **interpreter\_python = auto**
+
+  * Automatically detects which Python interpreter to use on the remote host.
+
+* **timeout = 30**
+
+  * SSH connection timeout in seconds.
+
+* **forks = 10**
+
+  * Maximum number of parallel processes (default concurrency level).
+
+* **gathering = smart**
+
+  * Optimizes fact gathering (caches facts when possible).
+
+* **stdout\_callback = yaml**
+
+  * Formats playbook output in **YAML** style for better readability.
+
+* **deprecation\_warnings = False**
+
+  * Suppresses deprecation warnings during execution.
+
+---
+
+## `[privilege_escalation]`
+
+* **become = True**
+
+  * Enables privilege escalation (similar to `sudo`).
+
+* **become\_method = sudo**
+
+  * Uses `sudo` as the escalation method.
+
+* **become\_ask\_pass = False**
+
+  * Disables interactive password prompts (assumes key-based authentication).
+
+---
+
+## `[ssh_connection]`
+
+* **ssh\_args = -o ControlMaster=auto -o ControlPersist=60s**
+
+  * Enables SSH multiplexing for faster connections.
+  * Reuses SSH sessions for 60 seconds before closing.
+
+* **pipelining = True**
+
+  * Reduces the number of SSH operations per task (improves performance).
+
+---
+
+This configuration provides:
+
+* **Performance optimizations** (pipelining, forks, SSH multiplexing)
+* **Cleaner output** (YAML formatting, no retry files, no deprecation spam)
+* **Simplified privilege management** (sudo enabled by default)
+
+---
+
+
