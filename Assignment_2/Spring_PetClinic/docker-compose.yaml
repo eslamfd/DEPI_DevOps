@@ -1,0 +1,145 @@
+version: "3.9"
+
+services:
+  app-postgres:
+    image: petclinic:latest
+    container_name: petclinic_pg
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/petclinic
+      SPRING_DATASOURCE_USERNAME: petclinic
+      SPRING_DATASOURCE_PASSWORD: petclinic
+    depends_on:
+      - postgres
+    networks:
+      - backend
+    restart: unless-stopped
+
+  app-mysql:
+    image: petclinic:latest
+    container_name: petclinic_mysql
+    ports:
+      - "8081:8080"   # host 8081 -> container 8080 so both apps can run
+    environment:
+      SPRING_PROFILES_ACTIVE: mysql
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/petclinic
+      SPRING_DATASOURCE_USERNAME: petclinic
+      SPRING_DATASOURCE_PASSWORD: petclinic
+    depends_on:
+      - mysql
+    networks:
+      - backend
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: petclinic_postgres
+    environment:
+      POSTGRES_DB: petclinic
+      POSTGRES_USER: petclinic
+      POSTGRES_PASSWORD: petclinic
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    container_name: petclinic_mysql_db
+    environment:
+      MYSQL_DATABASE: petclinic
+      MYSQL_USER: petclinic
+      MYSQL_PASSWORD: petclinic
+      MYSQL_ROOT_PASSWORD: rootpass
+    command: --default-authentication-plugin=mysql_native_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - backend
+    restart: unless-stopped
+
+  sonarqube:
+    image: sonarqube:community
+    container_name: sonarqube
+    ports:
+      - "9000:9000"
+    environment:
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+    networks:
+      - backend
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus            # persist TSDB
+    networks:
+      - backend
+    depends_on:
+      - app-postgres
+      - app-mysql
+      - postgres_exporter
+      - mysqld_exporter
+    restart: unless-stopped
+
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: postgres_exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://petclinic:petclinic@postgres:5432/petclinic?sslmode=disable"
+    networks:
+      - backend
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  mysqld_exporter:
+    image: prom/mysqld-exporter:latest
+    container_name: mysqld_exporter
+    environment:
+      MYSQL_DATA_SOURCE_NAME: "petclinic:petclinic@(mysql:3306)/"
+    networks:
+      - backend
+    depends_on:
+      - mysql
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - backend
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+  mysql_data:
+  sonarqube_data:
+  sonarqube_extensions:
+  grafana_data:
+  prometheus_data:   # added so Prometheus retains metrics across restarts
+
+networks:
+  backend:
+    driver: bridge
