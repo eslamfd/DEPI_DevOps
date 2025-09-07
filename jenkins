@@ -1,0 +1,13 @@
+agent any
+
+pwd()
+
+dir('~/DEPI/spring-petclinic/spring-petclinic$') {
+    // some block
+    stage('Build') {
+      stages {
+        // One or more stages need to be included within the stages block.
+        sh './mvnw clean package'
+      }
+    }
+}
